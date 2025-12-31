@@ -1,0 +1,33 @@
+{
+  "properties": {
+    "displayName": "Require Environment tag",
+    "description": "Ensures all resources have Environment tag",
+    "parameters": {
+      "tagName": {
+        "type": "String",
+        "metadata": {
+          "displayName": "Tag Name",
+          "description": "Name of the tag to require"
+        },
+        "defaultValue": "Environment"
+      },
+      "tagValue": {
+        "type": "String",
+        "metadata": {
+          "displayName": "Tag Value",
+          "description": "Value of the tag"
+        },
+        "defaultValue": "Production"
+      }
+    },
+    "policyRule": {
+      "if": {
+        "field": "[concat('tags[', parameters('tagName'), ']')]",
+        "exists": false
+      },
+      "then": {
+        "effect": "deny"
+      }
+    }
+  }
+}

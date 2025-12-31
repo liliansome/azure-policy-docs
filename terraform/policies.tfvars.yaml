@@ -1,0 +1,45 @@
+# Azure Policy Configuration Variables
+azure_policies:
+  location_policy:
+    name: "location-restriction"
+    display_name: "Allowed Locations"
+    description: "Restrict resource deployment to approved regions"
+    mode: "Indexed"
+    parameters:
+      listOfAllowedLocations:
+        type: "Array"
+        default_value: ["eastus", "eastus2"]
+    policy_rule: |
+      {
+        "if": {
+          "field": "location",
+          "notIn": "[parameters('listOfAllowedLocations')]"
+        },
+        "then": {
+          "effect": "deny"
+        }
+      }
+
+  tagging_policy:
+    name: "require-tags"
+    display_name: "Require Tags"
+    description: "Require specific tags on resources"
+    parameters:
+      tagName:
+        type: "String"
+        default_value: "Environment"
+      tagValue:
+        type: "String"
+        default_value: "Production"
+
+assignments:
+  production:
+    scope: "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/production"
+    policies:
+      - name: "location-restriction"
+        parameters:
+          listOfAllowedLocations: ["eastus"]
+      - name: "require-tags"
+        parameters:
+          tagName: "Environment"
+          tagValue: "Production"

@@ -1,0 +1,88 @@
+name: Daily Compliance Check
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # Daily at 8 AM UTC
+  workflow_dispatch:
+
+jobs:
+  check-compliance:
+    runs-on: ubuntu-latest
+    name: Check Azure Policy Compliance
+    
+    steps:
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Get Compliance Summary
+        id: compliance
+        run: |
+          summary=$(az policy state summarize \
+            --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }} \
+            --query "results.summary" -o json)
+          
+          echo "summary=$summary" >> $GITHUB_OUTPUT
+          
+          # Extract counts
+          compliant=$(echo $summary | jq '.results.resourceDetails[0].compliant')
+          nonCompliant=$(echo $summary | jq '.results.resourceDetails[0].nonCompliant')
+          
+          echo "Compliant resources: $compliant"
+          echo "Non-compliant resources: $nonCompliant"
+          
+          # Create comment for PR
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "COMPLIANCE_REPORT<<EOF" >> $GITHUB_ENV
+            echo "## 📊 Policy Compliance Report" >> $GITHUB_ENV
+            echo "" >> $GITHUB_ENV
+            echo "**Compliant Resources:** $compliant" >> $GITHUB_ENV
+            echo "**Non-Compliant Resources:** $nonCompliant" >> $GITHUB_ENV
+            echo "" >> $GITHUB_ENV
+            echo "*Report generated at $(date)*" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+          fi
+      
+      - name: Generate Compliance Report
+        if: always()
+        run: |
+          echo "Generating compliance report..."
+          
+          # Get detailed non-compliant resources
+          az policy state list \
+            --filter "complianceState eq 'NonCompliant'" \
+            --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }} \
+            --query "[].{Resource:resourceId, Policy:policyAssignmentName}" \
+            --output table > non-compliant-resources.txt
+          
+          # Create markdown report
+          cat > compliance-report.md << EOF
+          # Azure Policy Compliance Report
+          
+          **Generated:** $(date)
+          **Subscription:** ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          
+          ## Summary
+          - Total Resources: $(echo ${{ steps.compliance.outputs.summary }} | jq '.results.resourceDetails[0].total')
+          - Compliant: $(echo ${{ steps.compliance.outputs.summary }} | jq '.results.resourceDetails[0].compliant')
+          - Non-Compliant: $(echo ${{ steps.compliance.outputs.summary }} | jq '.results.resourceDetails[0].nonCompliant')
+          
+          ## Non-Compliant Resources
+          \`\`\`
+          $(cat non-compliant-resources.txt)
+          \`\`\`
+          
+          ## Recommendations
+          1. Review non-compliant resources
+          2. Apply remediation tasks
+          3. Update policies if needed
+          EOF
+      
+      - name: Upload Compliance Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: compliance-report
+          path: |
+            compliance-report.md
+            non-compliant-resources.txt

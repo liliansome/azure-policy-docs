@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  azure-cli:
+    image: mcr.microsoft.com/azure-cli:latest
+    container_name: azure-policy-tester
+    volumes:
+      - ./policy-definitions:/policies
+      - ./scripts:/scripts
+      - ~/.azure:/root/.azure
+    environment:
+      - AZURE_SUBSCRIPTION_ID=${AZURE_SUBSCRIPTION_ID}
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
+    command: tail -f /dev/null
+
+  policy-validator:
+    build:
+      context: .
+      dockerfile: Dockerfile.validator
+    volumes:
+      - ./policy-definitions:/policies
+    command: python /app/validate_policies.py
+
+  mock-api:
+    image: mcr.microsoft.com/azure-policy/mock-api:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - MOCK_MODE=true
+    volumes:
+      - ./test-data:/data

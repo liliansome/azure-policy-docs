@@ -1,0 +1,30 @@
+{
+  "properties": {
+    "displayName": "Allowed locations - East US only",
+    "description": "Restrict resource deployment to East US region",
+    "metadata": {
+      "version": "1.0.0",
+      "category": "Locations"
+    },
+    "parameters": {
+      "listOfAllowedLocations": {
+        "type": "Array",
+        "metadata": {
+          "displayName": "Allowed locations",
+          "description": "The list of locations that resources can be deployed to.",
+          "strongType": "location"
+        },
+        "defaultValue": ["eastus"]
+      }
+    },
+    "policyRule": {
+      "if": {
+        "field": "location",
+        "notIn": "[parameters('listOfAllowedLocations')]"
+      },
+      "then": {
+        "effect": "deny"
+      }
+    }
+  }
+}

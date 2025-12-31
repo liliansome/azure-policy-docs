@@ -1,0 +1,38 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: azure-policy-gitops
+  namespace: default
+  annotations:
+    policy.open-cluster-management.io/categories: CM Configuration Management
+    policy.open-cluster-management.io/controls: CM-2 Baseline Configuration
+spec:
+  remediationAction: inform
+  disabled: false
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: azure-resource-tags
+        spec:
+          remediationAction: inform
+          severity: low
+          namespaceSelector:
+            exclude: ["kube-system"]
+            include: ["*"]
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: resources.azure.com/v1
+                kind: ResourceGroup
+                metadata:
+                  name: "{{ .name }}"
+                  labels:
+                    environment: "{{ .environment }}"
+                    cost-center: "{{ .costCenter }}"
+              conditions:
+                - name: environmentTag
+                  type: MustHave
+                - name: costCenterTag
+                  type: MustHave

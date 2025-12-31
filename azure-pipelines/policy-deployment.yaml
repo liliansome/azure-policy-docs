@@ -1,0 +1,87 @@
+trigger:
+  branches:
+    include:
+      - main
+      - releases/*
+
+variables:
+  azureSubscription: 'Azure Subscription Connection'
+  resourceGroup: 'policy-management-rg'
+  location: 'eastus'
+
+stages:
+  - stage: Validate
+    displayName: Validate Policies
+    jobs:
+      - job: ValidateYAML
+        displayName: Validate YAML Syntax
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.9'
+          
+          - script: |
+              pip install yamllint pyyaml
+              yamllint -d relaxed policy-definitions/
+            displayName: 'Lint YAML files'
+          
+          - script: |
+              python scripts/validate_policies.py
+            displayName: 'Validate Policy Schema'
+
+  - stage: Deploy
+    displayName: Deploy Policies
+    dependsOn: Validate
+    jobs:
+      - deployment: DeployToAzure
+        environment: 'production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      # Deploy policy definitions
+                      for file in policy-definitions/*.yaml; do
+                        echo "Deploying $(basename $file .yaml)"
+                        az policy definition create \
+                          --name $(basename $file .yaml) \
+                          --rules "$file" \
+                          --params "@${file%.yaml}.params.json"
+                      done
+                      
+                      # Assign policies
+                      az deployment group create \
+                        --resource-group $(resourceGroup) \
+                        --template-file assignments/main.bicep \
+                        --parameters @assignments/params.json
+
+  - stage: Verify
+    displayName: Verify Deployment
+    dependsOn: Deploy
+    jobs:
+      - job: VerifyCompliance
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                echo "Checking policy compliance..."
+                az policy state summarize \
+                  --resource-group $(resourceGroup) \
+                  --query "results.summary"
+                
+                # Generate report
+                az policy state list \
+                  --filter "complianceState eq 'NonCompliant'" \
+                  --output table

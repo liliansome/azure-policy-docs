@@ -1,0 +1,38 @@
+name: Validate Azure Policies
+
+on:
+  push:
+    paths:
+      - 'examples/**'
+      - 'policies/**'
+  pull_request:
+    paths:
+      - 'examples/**'
+      - 'policies/**'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Azure CLI
+      uses: azure/CLI@v1
+      with:
+        azcliversion: latest
+        
+    - name: Validate Policy JSON
+      run: |
+        for file in examples/*.json policies/*.json; do
+          echo "Validating $file"
+          python -m json.tool "$file" > /dev/null
+          echo "✓ $file is valid JSON"
+        done
+    
+    - name: Lint Markdown
+      uses: github/super-linter@v4
+      env:
+        VALIDATE_ALL_CODEBASE: false
+        VALIDATE_MARKDOWN: true
+        DEFAULT_BRANCH: main
